@@ -1,11 +1,15 @@
 {- Layout
 
 /Music/         The music database, where each song is represented as a file
+
                 Seeking in a file will cause playback to seek
+
                 Reading a file will append it to the playlist and play it back
+
                 The size encodes the length in seconds
+
                 Read-only
-                Sub-folders contain different views of the database
+
     Genres      Songs organised by genre
     Artists     Songs organised by artist
     Albums      Songs organised by album
@@ -16,6 +20,9 @@
     Current/    Contains the current playlist
                 Deleting this directory clears the current playlist
 /Outputs/       Output devices, one read-only file per device
+                outputID:outputName
+                Each file contains either 1 (if enabled) or 0 (if disabled)
+                Writing 1 to a file enables the output, writing 0 to a file disables it
 /stats          A read-only file containing MPD statistics
 /state          Current player state (one of: play, pause, stop)
                 Writing to this file changes the player state
@@ -25,6 +32,7 @@
 
 TODO:
 - Modes should be set according to admin privileges
+- Refactor
 -}
 
 import Data.List
