@@ -1,5 +1,5 @@
 About
-    A FUSER filesystem for the Music Player Daemon (MPD)
+    A FUSE filesystem for the Music Player Daemon (MPD)
 
 Installing
     $ cabal configure
