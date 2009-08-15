@@ -7,7 +7,7 @@ license: GPL
 license-file: COPYING
 author: Joachim Fasting
 maintainer: joachim.fasting@gmail.com
-extra-source-files:
+extra-source-files: README
 cabal-version: >= 1.2
 build-type: Simple
 

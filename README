@@ -1,0 +1,17 @@
+About
+    A FUSER filesystem for the Music Player Daemon (MPD)
+
+Installing
+    $ cabal configure
+    $ cabal build
+    $ cabal install
+
+    Requires cabal-install
+
+Example usage
+    $ mkdir mpd
+    $ mpdfs -d mpd
+    $ cd mpd
+    $ cat stats
+    $ cd ..
+    $ fusermount -u mpd
