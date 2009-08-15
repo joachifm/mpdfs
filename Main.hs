@@ -59,11 +59,17 @@ mpdReadDirectory "/" = return $ Right
     ,("..", mpdDirEntry)
     ,("Outputs", mpdDirEntry)
     ,("stats", mpdFileEntry)]
-mpdReadDirectory "Outputs" = do
+mpdReadDirectory "/Outputs" = do
     r <- withMPD outputs
     case r of
-        Right os -> return $ Right []
+        Right os -> return . Right $
+            [(".", mpdDirEntry)
+            ,("..", mpdDirEntry)]
+            ++ map (\x -> (outputFileName x, mpdFileEntry)) os
         Left _   -> return $ Left eNOENT
+    where
+        outputFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
+
 mpdReadDirectory "/stats" = return $ Left eNOTDIR
 mpdReadDirectory _ = return $ Left eNOENT
 
@@ -82,6 +88,8 @@ mpdRename _ _ = return eOK
 mpdOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
 mpdOpen "/stats" ReadOnly _ = return $ Right undefined
 mpdOpen "/stats" _ _        = return $ Left eACCES
+mpdOpen p _ _
+    | "/Outputs" `isPrefixOf` p = return $ Right undefined
 mpdOpen _ _ _               = return $ Left eNOENT
 
 mpdRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
@@ -101,9 +109,35 @@ mpdRead "/stats" _ _ _ = do
         Left e    -> do
             print e
             return $ Left eNOENT
+mpdRead p _ _ _
+    | "/Outputs" `isPrefixOf` p = do
+    let fileName = takeBaseName p
+        outputID = read $ take 1 fileName
+    r <- withMPD outputs
+    case r of
+        Right os -> do
+            let [d] = filter ((==) outputID . dOutputID) os
+            return . Right $ B.pack ((if dOutputEnabled d then "1" else "0") ++ "\n")
+        Left e -> do
+            print e
+            return $ Left eNOENT
+
 mpdRead _ _ _ _ = return $ Left eNOENT
 
 mpdWrite :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
+mpdWrite p _ s _
+    | "/Outputs" `isPrefixOf` p = do
+    let fileName = takeBaseName p
+        outputID = read $ take 1 fileName
+        newState = B.unpack s
+    r <- withMPD $ case newState of "0" -> disableOutput outputID
+                                    _   -> enableOutput outputID
+    case r of
+        Right _ -> return $ Right 1
+        Left e  -> do
+            print e
+            return $ Left eNOENT
+
 mpdWrite _ _ _ _ = return $ Left eNOENT
 
 mpdGetFileStat :: FilePath -> IO (Either Errno FileStat)
@@ -118,6 +152,14 @@ mpdGetFileStat "/Outputs" = do
     return . Right $ mpdDirEntry
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
+        }
+mpdGetFileStat p
+    | "/Outputs" `isPrefixOf` p = do
+    ctx <- getFuseContext
+    return . Right $ mpdFileEntry
+        { statFileOwner = fuseCtxUserID ctx
+        , statFileGroup = fuseCtxGroupID ctx
+        , statFileSize  = 4096
         }
 mpdGetFileStat "/stats" = do
     ctx <- getFuseContext
@@ -159,3 +201,6 @@ emptyFileStat = FileStat
 
 mpdGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
 mpdGetFileSystemStats _ = return $ Left eOK
+
+replace :: Eq a => a -> a -> [a] -> [a]
+replace e with = map (\x -> if x == e then with else x)
