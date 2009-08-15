@@ -1,0 +1,17 @@
+name: mpdfs
+version: 0.1
+homepage:
+synopsis: A FUSE filesystem for the Music Player Daemon
+category:
+license: GPL
+license-file: COPYING
+author: Joachim Fasting
+maintainer: joachim.fasting@gmail.com
+extra-source-files:
+cabal-version: >= 1.2
+build-type: Simple
+
+executable mpdfs
+    main-is: Main.hs
+    build-depends: base ==4.*, HFuse ==0.2.*, libmpd ==0.3.*, unix ==2.*,
+                   bytestring ==0.9.*, filepath ==1.*
