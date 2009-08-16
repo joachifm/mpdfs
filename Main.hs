@@ -155,7 +155,6 @@ mpdGetFileStat "/stats" = do
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         , statFileSize  = 4096
-        , statFileMode  = allReadMode
         }
 mpdGetFileStat _ = return $ Left eNOENT
 
