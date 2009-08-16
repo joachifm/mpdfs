@@ -103,6 +103,7 @@ mpdRead p _ _ _
 
 mpdRead _ _ _ _ = return $ Left eNOENT
 
+-- Implements the pwrite(2) call.
 mpdWrite :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
 mpdWrite p _ s _
     | "/Outputs" `isPrefixOf` p = do
@@ -110,7 +111,7 @@ mpdWrite p _ s _
                                       _   -> enableOutput
     r <- withMPD $ newState (takeOutputID p)
     case r of
-        Right _ -> return $ Right 1
+        Right _ -> return $ Right (fromIntegral $ B.length s)
         Left e  -> do
             print e
             return $ Left eNOENT
