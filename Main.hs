@@ -38,7 +38,7 @@ mpdReadDirectory "/" = return $ Right
     [(".", mpdDirectory)
     ,("..", mpdDirectory)
     ,("Outputs", mpdDirectory)
-    ,("stats", mpdReadOnlyFile)]
+    ,("Stats", mpdDirectory)]
 mpdReadDirectory "/Outputs" = do
     r <- withMPD outputs
     case r of
@@ -49,16 +49,29 @@ mpdReadDirectory "/Outputs" = do
         Left e   -> do
                print e -- debug message, visible when mounted with '-d'
                return $ Left eNOENT
-
-mpdReadDirectory "/stats" = return $ Left eNOTDIR
+mpdReadDirectory "/Stats" = do
+    r <- withMPD ping
+    case r of
+        Right _ -> return . Right $
+           [(".", mpdDirectory)
+           ,("..", mpdDirectory)
+           ,("artists", mpdReadOnlyFile)
+           ,("albums", mpdReadOnlyFile)
+           ,("songs", mpdReadOnlyFile)
+           ,("uptime", mpdReadOnlyFile)
+           ,("playtime", mpdReadOnlyFile)
+           ,("db_playtime", mpdReadOnlyFile)
+           ,("db_update", mpdReadOnlyFile)]
+        Left e -> do
+               print e
+               return $ Left eNOENT
 mpdReadDirectory _ = return $ Left eNOENT
 
 -- Determines what happens when someone requests to open a directory
 -- in the file system.
 mpdOpenDirectory :: FilePath -> IO Errno
 mpdOpenDirectory p
-    | p `elem` ["/", "/Outputs"] = return $ eOK
-mpdOpenDirectory "/stats" = return $ eNOTDIR
+    | p `elem` ["/", "/Outputs", "/Stats"] = return $ eOK
 mpdOpenDirectory _ = return $ eNOENT
 
 mpdCreateDirectory :: FilePath -> FileMode -> IO Errno
@@ -72,22 +85,6 @@ mpdRename _ _ = return eOK
 -- To add a new file to MPDFS make sure it has an entry here, in 'mpdRead',
 --'mpdWrite', 'mpdOpen', and 'mpdGetFileStat'.
 mpdRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
-mpdRead "/stats" _ _ _ = do
-    r <- withMPD stats
-    case r of
-        Right sts -> do
-            return . Right . B.pack $ unlines
-                [ "artists: " ++ show (stsArtists sts)
-                , "albums: " ++ show (stsAlbums sts)
-                , "songs: " ++ show (stsSongs sts)
-                , "uptime: " ++ show (stsUptime sts)
-                , "playtime: " ++ show (stsPlaytime sts)
-                , "db_playtime: " ++ show (stsDbPlaytime sts)
-                , "db_update: " ++ show (stsDbUpdate sts)
-                ]
-        Left e    -> do
-            print e
-            return $ Left eNOENT
 mpdRead p _ _ _
     | "/Outputs" `isPrefixOf` p = do
     let fileName = takeBaseName p
@@ -100,6 +97,22 @@ mpdRead p _ _ _
         Left e -> do
             print e
             return $ Left eNOENT
+    | "/Stats" `isPrefixOf` p = do
+    let fileName = takeBaseName p
+        field    = case fileName of
+                       "artists"     -> stsArtists
+                       "albums"      -> stsAlbums
+                       "songs"       -> stsSongs
+                       "uptime"      -> stsUptime
+                       "playtime"    -> stsPlaytime
+                       "db_playtime" -> stsDbPlaytime
+                       "db_update"   -> stsDbUpdate
+    r <- withMPD stats
+    case r of
+        Right sts -> return . Right . B.pack $ show (field sts) ++ "\n"
+        Left e -> do
+               print e
+               return $ Left eNOENT
 
 mpdRead _ _ _ _ = return $ Left eNOENT
 
@@ -119,10 +132,9 @@ mpdWrite p _ s _
 mpdWrite _ _ _ _ = return $ Left eNOENT
 
 mpdOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
-mpdOpen "/stats" ReadOnly _ = return $ Right undefined
-mpdOpen "/stats" _ _        = return $ Left eACCES
 mpdOpen p _ _
     | "/Outputs" `isPrefixOf` p = return $ Right undefined
+    | "/Stats" `isPrefixOf` p   = return $ Right undefined
 mpdOpen _ _ _               = return $ Left eNOENT
 
 -- Implements the stat(3) call.
@@ -141,6 +153,12 @@ mpdGetFileStat "/Outputs" = do
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         }
+mpdGetFileStat "/Stats" = do
+    ctx <- getFuseContext
+    return . Right $ mpdDirectory
+        { statFileOwner = fuseCtxUserID ctx
+        , statFileGroup = fuseCtxGroupID ctx
+        }
 mpdGetFileStat p
     | "/Outputs" `isPrefixOf` p = do
     ctx <- getFuseContext
@@ -149,11 +167,12 @@ mpdGetFileStat p
         , statFileGroup = fuseCtxGroupID ctx
         , statFileSize  = 4096
         }
-mpdGetFileStat "/stats" = do
+    | "/Stats" `isPrefixOf` p = do
     ctx <- getFuseContext
-    return . Right $ mpdReadOnlyFile
+    return . Right $ mpdWritableFile
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
+        -- XXX: we should use the actual size of the contents here
         , statFileSize  = 4096
         }
 mpdGetFileStat _ = return $ Left eNOENT
