@@ -1,5 +1,4 @@
 import Data.List
-import Foreign.C.Error
 import System.FilePath
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as B
