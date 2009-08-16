@@ -24,6 +24,9 @@ mpdFSOps = defaultFuseOps
     , fuseOpenDirectory = mpdOpenDirectory
     , fuseCreateDirectory = mpdCreateDirectory
     , fuseRename = mpdRename
+    -- Dummies to make FUSE happy.
+    , fuseSetFileSize = (\_ _ -> return eOK)
+    , fuseSetFileTimes = (\_ _ _ -> return eOK)
     }
 
 -- Determines what is returned by the readdir(3) call.
