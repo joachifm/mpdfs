@@ -10,9 +10,9 @@ Installing
 
 Example usage
     $ mkdir mpd
-    $ mpdfs -d mpd
+    $ mpdfs mpd
     $ cd mpd
-    $ cat stats
+    $ cat Stats/albums
     $ cd ..
     $ fusermount -u mpd
 
