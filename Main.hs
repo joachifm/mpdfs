@@ -1,40 +1,3 @@
-{- Layout
-
-/Music/         The music database, where each song is represented as a file
-
-                Seeking in a file will cause playback to seek
-
-                Reading a file will append it to the playlist and play it back
-
-                The size encodes the length in seconds
-
-                Read-only
-
-    Genres      Songs organised by genre
-    Artists     Songs organised by artist
-    Albums      Songs organised by album
-
-/Playlists/     Playlists, one directory per playlist
-                Creating a directory creates a playlist with the same name
-                Moving files to/from a playlist directory manipulates the playlist with the same name
-    Current/    Contains the current playlist
-                Deleting this directory clears the current playlist
-/Outputs/       Output devices, one read-only file per device
-                outputID:outputName
-                Each file contains either 1 (if enabled) or 0 (if disabled)
-                Writing 1 to a file enables the output, writing 0 to a file disables it
-/stats          A read-only file containing MPD statistics
-/state          Current player state (one of: play, pause, stop)
-                Writing to this file changes the player state
-/volume         Current volume (absolute value)
-                Writing to this file changes the current volume
-/control        Execute commands by writing to this file
-
-TODO:
-- Modes should be set according to admin privileges
-- Refactor
--}
-
 import Data.List
 import Foreign.C.Error
 import System.FilePath
@@ -47,6 +10,10 @@ import System.Fuse
 
 main :: IO ()
 main = fuseMain mpdFSOps defaultExceptionHandler
+
+--
+-- File system operations.
+--
 
 mpdFSOps :: FuseOperations fh
 mpdFSOps = defaultFuseOps
@@ -61,6 +28,10 @@ mpdFSOps = defaultFuseOps
     , fuseGetFileSystemStats = mpdGetFileSystemStats
     }
 
+-- Determines what is returned by the readdir(3) call.
+--
+-- To add a new MPDFS directory make sure it has an entry here, in
+-- 'mpdOpenDirectory' and in 'mpdGetFileStat'.
 mpdReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
 mpdReadDirectory "/" = return $ Right
     [(".", mpdDirEntry)
@@ -74,13 +45,15 @@ mpdReadDirectory "/Outputs" = do
             [(".", mpdDirEntry)
             ,("..", mpdDirEntry)]
             ++ map (\x -> (outputFileName x, mpdFileEntry)) os
-        Left _   -> return $ Left eNOENT
-    where
-        outputFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
+        Left e   -> do
+               print e -- debug message, visible when mounted with '-d'
+               return $ Left eNOENT
 
 mpdReadDirectory "/stats" = return $ Left eNOTDIR
 mpdReadDirectory _ = return $ Left eNOENT
 
+-- Determines what happens when someone requests to open a directory
+-- in the file system.
 mpdOpenDirectory :: FilePath -> IO Errno
 mpdOpenDirectory p
     | p `elem` ["/", "/Outputs"] = return $ eOK
@@ -93,13 +66,10 @@ mpdCreateDirectory _ _ = return eOK
 mpdRename :: FilePath -> FilePath -> IO Errno
 mpdRename _ _ = return eOK
 
-mpdOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
-mpdOpen "/stats" ReadOnly _ = return $ Right undefined
-mpdOpen "/stats" _ _        = return $ Left eACCES
-mpdOpen p _ _
-    | "/Outputs" `isPrefixOf` p = return $ Right undefined
-mpdOpen _ _ _               = return $ Left eNOENT
-
+-- Determines what is returned by the open(3) call.
+--
+-- To add a new file to MPDFS make sure it has an entry here, in 'mpdRead',
+--'mpdWrite', 'mpdOpen', and 'mpdGetFileStat'.
 mpdRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
 mpdRead "/stats" _ _ _ = do
     r <- withMPD stats
@@ -135,11 +105,9 @@ mpdRead _ _ _ _ = return $ Left eNOENT
 mpdWrite :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
 mpdWrite p _ s _
     | "/Outputs" `isPrefixOf` p = do
-    let fileName = takeBaseName p
-        outputID = read $ take 1 fileName
-        newState = B.unpack s
-    r <- withMPD $ case newState of "0" -> disableOutput outputID
-                                    _   -> enableOutput outputID
+    let newState = case B.unpack s of "0" -> disableOutput
+                                      _   -> enableOutput
+    r <- withMPD $ newState (takeOutputID p)
     case r of
         Right _ -> return $ Right 1
         Left e  -> do
@@ -148,6 +116,16 @@ mpdWrite p _ s _
 
 mpdWrite _ _ _ _ = return $ Left eNOENT
 
+mpdOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
+mpdOpen "/stats" ReadOnly _ = return $ Right undefined
+mpdOpen "/stats" _ _        = return $ Left eACCES
+mpdOpen p _ _
+    | "/Outputs" `isPrefixOf` p = return $ Right undefined
+mpdOpen _ _ _               = return $ Left eNOENT
+
+-- Implements the stat(3) call.
+--
+-- Remember that read(3) will not read more than 'statFileSize'.
 mpdGetFileStat :: FilePath -> IO (Either Errno FileStat)
 mpdGetFileStat "/" = do
     ctx <- getFuseContext
@@ -209,6 +187,20 @@ emptyFileStat = FileStat
 
 mpdGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
 mpdGetFileSystemStats _ = return $ Left eOK
+
+--
+-- Mapping MPD data structures to file system objects.
+--
+
+takeOutputID :: FilePath -> Int
+takeOutputID = read . take 1 . takeBaseName
+
+outputFileName :: Device -> FilePath
+outputFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
+
+--
+-- Utilities.
+--
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace e with = map (\x -> if x == e then with else x)

@@ -15,3 +15,43 @@ Example usage
     $ cat stats
     $ cd ..
     $ fusermount -u mpd
+
+File system layout
+    Song files       All songs are represented by files, where the length of the
+                     song is encoded in the file size, and metadata is encoded in
+                     the file name.
+                     Reading song files appends that song to the playlist and starts
+                     playback.
+                     Seeking in a file will cause the player to seek in the song.
+
+    /Music/          The music database, where each song is represented as a file
+                     Read-only
+
+        Genres/      Songs organised by genre
+        Artists/     Songs organised by artist
+        Albums/      Songs organised by album
+
+    /Playlists/      Playlists, one directory per playlist
+                     Creating a directory creates a playlist with the same name
+                     Moving files to/from a playlist directory manipulates the playlist with the same name
+    /Current/        Contains the current playlist
+                     Deleting this directory clears the current playlist
+
+    /Outputs/        Output devices, one read-only file per device
+                     Output device file name scheme: outputID:outputName
+                     Each file contains either 1 (if enabled) or 0 (if disabled)
+                     Writing 0 to a file disables the output, any non-zero value enables it
+
+    /Stats/          Statistics, one file per stat
+                     Read-only
+
+    /State/          State, one file per state type
+        playback     A writable file containing current playback state (one of: play, pause, stop)
+                     Writing to this file changes the playback state
+
+        volume       A writable file containing current volume (absolute value)
+                     Writing to this file changes the volume
+
+   /control          A writable file that allows sending raw commands to the server
+
+   Note that none of this is currently implemented.
