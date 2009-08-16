@@ -24,7 +24,6 @@ mpdFSOps = defaultFuseOps
     , fuseOpenDirectory = mpdOpenDirectory
     , fuseCreateDirectory = mpdCreateDirectory
     , fuseRename = mpdRename
-    , fuseGetFileSystemStats = mpdGetFileSystemStats
     }
 
 -- Determines what is returned by the readdir(3) call.
@@ -33,17 +32,17 @@ mpdFSOps = defaultFuseOps
 -- 'mpdOpenDirectory' and in 'mpdGetFileStat'.
 mpdReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
 mpdReadDirectory "/" = return $ Right
-    [(".", mpdDirEntry)
-    ,("..", mpdDirEntry)
-    ,("Outputs", mpdDirEntry)
-    ,("stats", mpdFileEntry)]
+    [(".", mpdDirectory)
+    ,("..", mpdDirectory)
+    ,("Outputs", mpdDirectory)
+    ,("stats", mpdReadOnlyFile)]
 mpdReadDirectory "/Outputs" = do
     r <- withMPD outputs
     case r of
         Right os -> return . Right $
-            [(".", mpdDirEntry)
-            ,("..", mpdDirEntry)]
-            ++ map (\x -> (outputFileName x, mpdFileEntry)) os
+            [(".", mpdDirectory)
+            ,("..", mpdDirectory)]
+            ++ map (\x -> (outputFileName x, mpdWritableFile)) os
         Left e   -> do
                print e -- debug message, visible when mounted with '-d'
                return $ Left eNOENT
@@ -128,27 +127,27 @@ mpdOpen _ _ _               = return $ Left eNOENT
 mpdGetFileStat :: FilePath -> IO (Either Errno FileStat)
 mpdGetFileStat "/" = do
     ctx <- getFuseContext
-    return . Right $ mpdDirEntry
+    return . Right $ mpdDirectory
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         }
 mpdGetFileStat "/Outputs" = do
     ctx <- getFuseContext
-    return . Right $ mpdDirEntry
+    return . Right $ mpdDirectory
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         }
 mpdGetFileStat p
     | "/Outputs" `isPrefixOf` p = do
     ctx <- getFuseContext
-    return . Right $ mpdFileEntry
+    return . Right $ mpdWritableFile
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         , statFileSize  = 4096
         }
 mpdGetFileStat "/stats" = do
     ctx <- getFuseContext
-    return . Right $ mpdFileEntry
+    return . Right $ mpdReadOnlyFile
         { statFileOwner = fuseCtxUserID ctx
         , statFileGroup = fuseCtxGroupID ctx
         , statFileSize  = 4096
@@ -156,24 +155,23 @@ mpdGetFileStat "/stats" = do
         }
 mpdGetFileStat _ = return $ Left eNOENT
 
-allReadMode    = foldr1 unionFileModes [ ownerReadMode, groupReadMode, otherReadMode ]
-allExecuteMode = foldr1 unionFileModes [ ownerExecuteMode, groupExecuteMode, otherExecuteMode ]
-allWriteMode   = foldr1 unionFileModes [ ownerWriteMode, groupWriteMode, otherWriteMode ]
-
-mpdDirEntry = emptyFileStat
+mpdDirectory = emptyFileStat
     { statEntryType = Directory
     , statFileSize = 4096
     , statBlocks = 1
     }
 
-mpdFileEntry = emptyFileStat
+mpdWritableFile = mpdReadOnlyFile `appendMode` allWriteMode
+
+mpdReadOnlyFile = emptyFileStat
     { statEntryType = RegularFile
+    , statFileMode = allReadMode
     }
 
 emptyFileStat = FileStat
     { statEntryType = Unknown
     , statLinkCount = 0
-    , statFileMode = foldr1 unionFileModes [ allReadMode, allExecuteMode, allWriteMode ]
+    , statFileMode = 0
     , statFileOwner = 0
     , statFileGroup = 0
     , statSpecialDeviceID = 0
@@ -184,8 +182,14 @@ emptyFileStat = FileStat
     , statStatusChangeTime = 0
     }
 
-mpdGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
-mpdGetFileSystemStats _ = return $ Left eOK
+appendMode fstat mode =
+    fstat { statFileMode = combineModes [ mode, statFileMode fstat ] }
+
+allReadMode    = combineModes [ ownerReadMode, groupReadMode, otherReadMode ]
+allExecuteMode = combineModes [ ownerExecuteMode, groupExecuteMode, otherExecuteMode ]
+allWriteMode   = combineModes [ ownerWriteMode, groupWriteMode, otherWriteMode ]
+
+combineModes = foldr1 unionFileModes
 
 --
 -- Mapping MPD data structures to file system objects.
