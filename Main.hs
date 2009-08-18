@@ -27,6 +27,8 @@ mpdFSOps = defaultFuseOps
     -- Dummies to make FUSE happy.
     , fuseSetFileSize = (\_ _ -> return eOK)
     , fuseSetFileTimes = (\_ _ _ -> return eOK)
+    , fuseSetFileMode = (\_ _ -> return eOK)
+    , fuseSetOwnerAndGroup = (\_ _ _ -> return eOK)
     }
 
 -- Determines what is returned by the readdir(3) call.
