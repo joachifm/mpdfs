@@ -73,8 +73,8 @@ mpdReadDirectory _ = return $ Left eNOENT
 -- in the file system.
 mpdOpenDirectory :: FilePath -> IO Errno
 mpdOpenDirectory p
-    | p `elem` ["/", "/Outputs", "/Stats"] = return $ eOK
-mpdOpenDirectory _ = return $ eNOENT
+    | p `elem` ["/", "/Outputs", "/Stats"] = return eOK
+mpdOpenDirectory _ = return eNOENT
 
 mpdCreateDirectory :: FilePath -> FileMode -> IO Errno
 mpdCreateDirectory _ _ = return eOK
