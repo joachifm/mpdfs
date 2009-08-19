@@ -121,8 +121,8 @@ mpdRead _ _ _ _ = return $ Left eNOENT
 mpdWrite :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
 mpdWrite p _ s _
     | "/Outputs" `isPrefixOf` p = do
-    let newState = case B.unpack s of "0" -> disableOutput
-                                      _   -> enableOutput
+    let newState = case B.unpack s of "0\n" -> disableOutput
+                                      _     -> enableOutput
     print s
     print p
     r <- withMPD $ newState (takeOutputID p)
