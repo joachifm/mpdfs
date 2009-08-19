@@ -95,6 +95,7 @@ mpdRead p _ _ _
     case r of
         Right os -> do
             let [d] = filter ((==) outputID . dOutputID) os
+            print d
             return . Right $ B.pack ((if dOutputEnabled d then "1" else "0") ++ "\n")
         Left e -> do
             print e
@@ -124,6 +125,8 @@ mpdWrite p _ s _
     | "/Outputs" `isPrefixOf` p = do
     let newState = case B.unpack s of "0" -> disableOutput
                                       _   -> enableOutput
+    print s
+    print p
     r <- withMPD $ newState (takeOutputID p)
     case r of
         Right _ -> return $ Right (fromIntegral $ B.length s)
