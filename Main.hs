@@ -89,12 +89,10 @@ mpdRename _ _ = return eOK
 mpdRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
 mpdRead p _ _ _
     | "/Outputs" `isPrefixOf` p = do
-    let fileName = takeBaseName p
-        outputID = read $ take 1 fileName
     r <- withMPD outputs
     case r of
         Right os -> do
-            let [d] = filter ((==) outputID . dOutputID) os
+            let [d] = filter ((==) (takeOutputID p) . dOutputID) os
             print d
             return . Right $ B.pack ((if dOutputEnabled d then "1" else "0") ++ "\n")
         Left e -> do
