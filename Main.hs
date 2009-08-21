@@ -198,7 +198,7 @@ getDirectoryContents p = join . liftM fromMPD . withMPD $ do
 mkFileStat s = regularFile { statFileSize = fromIntegral len
                            , statBlocks   = fromIntegral blk }
     where
-        len = B.length s
+        len = B.length s + 1 -- remember space for trailing newline
         blk = (len `div` 4096) + 1
 
 directory, regularFile, emptyStat :: FileStat
