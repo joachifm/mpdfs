@@ -1,5 +1,16 @@
 - Implement layout
+
+- The system seems to hang at certain points
+  Hangs with FUTEX_WAIT_PRIVATE
+
+- Error handling needs to be improved
+  Factor out code that can handle MPD->fuse conversion
+
 - Refactor, refactor, refactor
+
 - Read/write privileges according to admin level
+
 - Support password protected servers
   Ask for password in fuseInit if necessary?
+  Or support ./mpdfs <password> <dir>
+  withMPD already handles this, so maybe just let it read the environment.
