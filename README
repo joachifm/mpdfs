@@ -2,11 +2,20 @@ About
     A FUSE filesystem for the Music Player Daemon (MPD)
 
 Installing
-    $ cabal configure
-    $ cabal build
-    $ cabal install
+    First you will need my personal branch of libmpd:
 
-    Requires cabal-install
+        $ git clone git://github.com/joachifm/libmpd-haskell.git libmpd-haskell
+        $ cd libmpd-haskell
+        $ cabal configure && cabal build && cabal install
+
+    Then get mpdfs itself:
+
+        $ git clone git://github.com/joachifm/mpdfs.git mpdfs
+        $ cd mpdfs
+        $ cabal configure && cabal build && cabal install
+
+    This assumes you already have cabal-install, which is available
+    at http://hackage.haskell.org or (possibly) from your OS vendor.
 
 Example usage
     $ mkdir mpd
