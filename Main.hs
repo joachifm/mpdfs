@@ -111,7 +111,7 @@ readDeviceFile p = fuseMPD $ do
    xs <- outputs
    case filter ((==) (takeDeviceID p) . dOutputID) xs of
        [d] -> return . B.pack $
-              if dOutputEnabled d then "1" else "0" ++ "\n"
+              (if dOutputEnabled d then "1" else "0") ++ "\n"
 
 readStatsFile p = fuseMPD $
     case lookup (takeBaseName p) selectors of
