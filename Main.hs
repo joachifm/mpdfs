@@ -151,7 +151,6 @@ stat p = do
 
 getDirectoryContents :: FilePath -> IO [(FilePath, FileStat)]
 getDirectoryContents p = join . liftM fromMPD . withMPD $ do
-    putStrLn $ "GETDIRECTORYCONTENTS " ++ p
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
         ("/":[]) -> return $ dots ++ [("Music", directory)
