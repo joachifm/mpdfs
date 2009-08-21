@@ -25,15 +25,22 @@ Example usage
     $ cd ..
     $ fusermount -u mpd
 
-File system layout
-    Song files       All songs are represented by files, where the length of the
-                     song is encoded in the file size, and metadata is encoded in
-                     the file name.
-                     Reading song files appends that song to the playlist and starts
-                     playback.
-                     Seeking in a file will cause the player to seek in the song.
+Status
+    Currently only a small subset of the program's features have actually been
+    implemented, and much of the code is very bad.
 
+    Output control is fully implemented.
+    Stats, status, and playlist handling is partially implemented.
+
+File system layout
     /Music/          The music database, where each song is represented as a file
+                     The length of the song is encoded in the file size, and metadata
+                     is encoded in the file name.
+
+                     Opening a song adds it to the playlist and starts playback.
+                     Seeking the handle of the song will cause the player to seek
+                     in the song.
+
                      Read-only
 
         Genres/      Songs organised by genre
@@ -61,6 +68,7 @@ File system layout
         volume       A writable file containing current volume (absolute value)
                      Writing to this file changes the volume
 
-   /control          A writable file that allows sending raw commands to the server
+        crossfade    A writable file containing the crossfade value
+                     Writing to this file changes the crossfade value.
 
-   Note that none of this is currently implemented.
+   /control          A writable file that allows sending raw commands to the server
