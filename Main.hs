@@ -166,6 +166,12 @@ getDirectoryContents p = join . liftM fromMPD . withMPD $ do
         ("/":"Playlists":[]) -> do
             pls <- lsPlaylists
             return $ dots ++ map (\x -> (x, directory)) pls
+        ("/":"Playlists":plName:[]) -> do
+            pls <- lsPlaylists
+            if plName `elem` pls
+             then do songs <- listPlaylist plName
+                     return $ dots ++ map (flip (,) regularFile) songs
+             else fail ""
         ("/":"Status":[]) -> do
             st <- status
             return $ dots ++ [("state", mkFileStat (packInt $ stState st))
@@ -200,6 +206,9 @@ mkFileStat s = regularFile { statFileSize = fromIntegral len
     where
         len = B.length s + 1 -- remember space for trailing newline
         blk = (len `div` 4096) + 1
+
+songFileStat :: Song -> FileStat
+songFileStat sg = regularFile { statFileSize = fromIntegral $ sgLength sg }
 
 directory, regularFile, emptyStat :: FileStat
 directory = emptyStat
@@ -237,6 +246,9 @@ takeDeviceID = read . take 1 . takeBaseName
 
 deviceFileName :: Device -> FilePath
 deviceFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
+
+songFileName :: Song -> FilePath
+songFileName = undefined
 
 --
 -- Utilities.
