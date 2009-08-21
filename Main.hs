@@ -93,9 +93,9 @@ readFile :: FilePath -> fh -> ByteCount -> FileOffset
 readFile p _ _ _ = do
     putStrLn $ "READ FILE " ++ p
     r <- case splitDirectories ("/" </> p) of
-             ("/Outputs":_:[]) -> readDeviceFile p
-             ("/Stats":_:[])   -> readStatsFile p
-             _                     -> fail "No such file"
+             ("/":"Outputs":_:[]) -> readDeviceFile p
+             ("/":"Stats":_:[])   -> readStatsFile p
+             _                    -> fail "No such file"
     return $ mpdToErrno r
 
 readDeviceFile p = withMPD $ do
@@ -123,8 +123,8 @@ writeFile p _ s _ = do
     putStrLn $ "WRITE FILE" ++ p
 
     r <- case splitDirectories ("/" </> p) of
-             ("/Outputs":_:[]) -> writeDeviceFile p s
-             _                     -> fail "No such file"
+             ("/":"Outputs":_:[]) -> writeDeviceFile p s
+             _                    -> fail "No such file"
 
     return $ either (const $ Left eNOENT)
                     (const $ Right . fromIntegral $ B.length s)
