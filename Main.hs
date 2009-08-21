@@ -15,6 +15,7 @@
 module Main (main) where
 
 import Data.List (isPrefixOf)
+import Data.Maybe (fromMaybe)
 import Control.Monad (join, liftM)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
@@ -92,22 +93,24 @@ readFile :: FilePath -> fh -> ByteCount -> FileOffset
          ->IO (Either Errno ByteString)
 readFile p _ _ _ = do
     putStrLn $ "READ FILE " ++ p
-    r <- case splitDirectories ("/" </> p) of
-             ("/":"Outputs":_:[]) -> readDeviceFile p
-             ("/":"Stats":_:[])   -> readStatsFile p
-             _                    -> fail "No such file"
-    return $ mpdToErrno r
+    case splitDirectories ("/" </> p) of
+        ("/":"Outputs":_:[]) -> readDeviceFile p
+        ("/":"Stats":_:[])   -> readStatsFile p
+        _                    -> return $ Left eNOENT -- this should be
+                                                     -- handled by
+                                                     -- openFile?
 
-readDeviceFile p = withMPD $ do
+readDeviceFile p = fuseMPD $ do
    xs <- outputs
    case filter ((==) (takeDeviceID p) . dOutputID) xs of
        [d] -> return . B.pack $
               if dOutputEnabled d then "1" else "0" ++ "\n"
 
-readStatsFile p = withMPD $ do
+readStatsFile p = fuseMPD $
     case lookup (takeBaseName p) selectors of
-        Just f  -> (flip B.snoc '\n' . packInt . f) `liftM` stats
-        Nothing -> fail "No such file"
+        Just f -> (flip B.snoc '\n' . packInt . f) `liftM` stats
+        _      -> undefined -- let's pretend openFile will prevent us from
+                            -- going here
     where
         selectors = [("artists", stsArtists)
                     ,("albums", stsAlbums)
@@ -124,13 +127,12 @@ writeFile p _ s _ = do
 
     r <- case splitDirectories ("/" </> p) of
              ("/":"Outputs":_:[]) -> writeDeviceFile p s
-             _                    -> fail "No such file"
+             _                    -> return $ Left eNOENT
 
-    return $ either (const $ Left eNOENT)
-                    (const $ Right . fromIntegral $ B.length s)
-                    r
+    return $
+           either Left (const $ Right . fromIntegral $ B.length s) r
 
-writeDeviceFile p s = withMPD $ do
+writeDeviceFile p s = fuseMPD $ do
     let setState = case B.readInt s of Just (0, _) -> disableOutput
                                        _ -> enableOutput
     setState (takeDeviceID p)
@@ -150,7 +152,9 @@ stat p = do
 --
 
 getDirectoryContents :: FilePath -> IO [(FilePath, FileStat)]
-getDirectoryContents p = join . liftM fromMPD . withMPD $ do
+getDirectoryContents p = do
+    putStrLn $ "GETDIR " ++ p
+    ioMPD $ do
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
         ("/":[]) -> return $ dots ++ [("Music", directory)
@@ -254,12 +258,24 @@ songFileName = undefined
 -- Utilities.
 --
 
-mpdToErrno :: Response a -> Either Errno a
-mpdToErrno (Left _)  = Left eNOENT
-mpdToErrno (Right r) = Right r
+-- Run an action in the MPD monad and lift the result
+-- into the FUSE context.
+fuseMPD :: MPD a -> IO (Either Errno a)
+fuseMPD m = liftResponse `liftM` withMPD m
 
-fromMPD :: Response a -> IO a
-fromMPD = either (fail . show) return
+-- Lift response from MPD into the FUSE context.
+liftResponse :: Response a -> Either Errno a
+liftResponse (Left _)  = Left eNOENT
+liftResponse (Right r) = Right r
+
+-- Run an action in the MPD monad and lift the result
+-- into I/O.
+ioMPD :: MPD a -> IO a
+ioMPD m = do
+    r <- withMPD m
+    either (fail . show)
+           return
+           r
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace from to = map (\x -> if x == from then to else x)
