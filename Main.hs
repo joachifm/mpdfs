@@ -232,3 +232,10 @@ outputFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace e with = map (\x -> if x == e then with else x)
+
+trim :: ByteString -> ByteString
+trim = ltrim . rtrim
+    where
+        rtrim = B.reverse . ltrim . B.reverse
+        ltrim = B.dropWhile (`elem` chars)
+        chars = ['\n', '\r', ' ']
