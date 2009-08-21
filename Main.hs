@@ -14,9 +14,12 @@
 
 module Main (main) where
 
+import Network.MPD.Unsafe
+
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Control.Monad (join, liftM)
+import Control.Monad.Error (catchError)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
@@ -27,7 +30,11 @@ import qualified Network.MPD as M
 import Prelude hiding (readFile, writeFile)
 
 main :: IO ()
-main = fuseMain operations defaultExceptionHandler
+main = do
+    runUnsafeMPD open
+    fuseMain operations defaultExceptionHandler
+    runUnsafeMPD close
+    return ()
 
 --
 -- FUSE operations.
@@ -168,14 +175,18 @@ getDirectoryContents p = do
             devs <- outputs
             return $ dots ++ map (\x -> (deviceFileName x, mkFileStat (B.pack "0"))) devs
         ("/":"Playlists":[]) -> do
-            pls <- lsPlaylists
-            return $ dots ++ map (\x -> (x, directory)) pls
+            return dots
+            -- pls <- lsPlaylists
+            --return $ dots ++ map (\x -> (x, directory)) pls
         ("/":"Playlists":plName:[]) -> do
+            return dots
+        {-
             pls <- lsPlaylists
             if plName `elem` pls
              then do songs <- listPlaylist plName
                      return $ dots ++ map (flip (,) regularFile) songs
              else fail ""
+        -}
         ("/":"Status":[]) -> do
             st <- status
             return $ dots ++ [("state", mkFileStat (packInt $ stState st))
@@ -260,8 +271,8 @@ songFileName = undefined
 
 -- Run an action in the MPD monad and lift the result
 -- into the FUSE context.
-fuseMPD :: MPD a -> IO (Either Errno a)
-fuseMPD m = liftResponse `liftM` withMPD m
+fuseMPD :: UnsafeMPD a -> IO (Either Errno a)
+fuseMPD m = liftResponse `liftM` runUnsafeMPD m
 
 -- Lift response from MPD into the FUSE context.
 liftResponse :: Response a -> Either Errno a
@@ -270,9 +281,9 @@ liftResponse (Right r) = Right r
 
 -- Run an action in the MPD monad and lift the result
 -- into I/O.
-ioMPD :: MPD a -> IO a
+ioMPD :: UnsafeMPD a -> IO a
 ioMPD m = do
-    r <- withMPD m
+    r <- runUnsafeMPD m
     either (fail . show)
            return
            r
