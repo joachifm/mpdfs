@@ -175,18 +175,14 @@ getDirectoryContents p = do
             devs <- outputs
             return $ dots ++ map (\x -> (deviceFileName x, mkFileStat (B.pack "0"))) devs
         ("/":"Playlists":[]) -> do
-            return dots
-            -- pls <- lsPlaylists
-            --return $ dots ++ map (\x -> (x, directory)) pls
+            pls <- lsPlaylists
+            return $ dots ++ map (\x -> (x, directory)) pls
         ("/":"Playlists":plName:[]) -> do
-            return dots
-        {-
             pls <- lsPlaylists
             if plName `elem` pls
              then do songs <- listPlaylist plName
                      return $ dots ++ map (flip (,) regularFile) songs
              else fail ""
-        -}
         ("/":"Status":[]) -> do
             st <- status
             return $ dots ++ [("state", mkFileStat (packInt $ stState st))

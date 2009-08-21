@@ -12,7 +12,7 @@
 
 module Network.MPD.Unsafe (UnsafeMPD(..), runUnsafeMPD, MonadMPD(..)) where
 
-import Network.MPD.Core hiding (io)
+import Network.MPD.Core
 import Network
 
 import Control.Exception (IOException, catch)
