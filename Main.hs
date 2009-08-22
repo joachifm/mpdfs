@@ -16,10 +16,7 @@ module Main (main) where
 
 import Network.MPD.Unsafe
 
-import Data.List (isPrefixOf)
-import Data.Maybe (fromMaybe)
-import Control.Monad (join, liftM)
-import Control.Monad.Error (catchError)
+import Control.Monad (liftM)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
@@ -112,6 +109,7 @@ readDeviceFile p = fuseMPD $ do
    case filter ((==) (takeDeviceID p) . dOutputID) xs of
        [d] -> return . B.pack $
               (if dOutputEnabled d then "1" else "0") ++ "\n"
+       _   -> undefined -- assume openFile makes sure this will never happen
 
 readStatsFile p = fuseMPD $
     case lookup (takeBaseName p) selectors of
@@ -159,9 +157,7 @@ stat p = do
 --
 
 getDirectoryContents :: FilePath -> IO [(FilePath, FileStat)]
-getDirectoryContents p = do
-    putStrLn $ "GETDIR " ++ p
-    ioMPD $ do
+getDirectoryContents p = ioMPD $ do
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
         ("/":[]) -> return $ dots ++ [("Music", directory)
@@ -169,8 +165,7 @@ getDirectoryContents p = do
                            ,("Playlists", directory)
                            ,("Status", directory)
                            ,("Stats", directory)]
-        ("/":"Music":[]) -> do
-            return dots
+        ("/":"Music":[]) -> return dots
         ("/":"Outputs":[]) -> do
             devs <- outputs
             return $ dots ++ map (\x -> (deviceFileName x, mkFileStat (B.pack "0"))) devs
@@ -278,17 +273,10 @@ liftResponse (Right r) = Right r
 -- Run an action in the MPD monad and lift the result
 -- into I/O.
 ioMPD :: UnsafeMPD a -> IO a
-ioMPD m = do
-    r <- unsafeMPD m
-    either (fail . show)
-           return
-           r
+ioMPD m = unsafeMPD m >>= either (fail . show) return
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace from to = map (\x -> if x == from then to else x)
-
-anyPrefix :: Eq a => [a] -> [[a]] -> Bool
-anyPrefix s prefixes = any (`isPrefixOf` s) prefixes
 
 packInt :: Show a => a -> ByteString
 packInt = B.pack . show
