@@ -67,6 +67,10 @@ openDirectory p = do
 createDirectory :: FilePath -> FileMode -> IO Errno
 createDirectory p _ = do
     putStrLn $ "CREATE DIRECTORY: " ++ p
+    case splitDirectories ("/" </> p) of
+        ("/":"Playlists":plName:[]) ->
+            unsafeMPD (add_ plName "") >>=
+            return . either (const $ eNOENT) (const $ eOK)
     return eOK
 
 rename :: FilePath -> FilePath -> IO Errno
