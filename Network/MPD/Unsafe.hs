@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Module   : Network.MPD.Unsafe
 -- Copyright  : (c) Joachim Fasting 2009
@@ -7,107 +7,102 @@
 -- Stability  : unstable
 --
 -- Makes puppies cry.
--- Intenionally left undocumented, please read the source before using.
+-- Intentionally left undocumented, please read the source before using.
 --
 
-module Network.MPD.Unsafe (UnsafeMPD(..), runUnsafeMPD, MonadMPD(..)) where
+module Network.MPD.Unsafe (MonadMPD(..), UnsafeMPD(..), unsafeMPD) where
 
-import Network.MPD.Core
-import Network
+import Network.MPD.Core (MonadMPD, MPDError(..), Response)
+import qualified Network.MPD.Core as M
 
-import Control.Exception (IOException, catch)
+import Control.Concurrent.MVar
+import Control.Exception
 import Prelude hiding (catch)
-import Control.Monad (liftM)
-import Control.Monad.Error (ErrorT(..), MonadError(..))
+import Control.Monad.Error
 import Control.Monad.Trans
-import Data.List
 import Data.IORef
+import Data.List
+import Data.Maybe
+import Network
 import System.IO.Unsafe
 import System.IO
 
 --
--- Configuration
+-- MonadMPD instance
 --
 
-port = 6600
-host = "localhost"
+newtype UnsafeMPD a = UnsafeMPD { unMPD :: ErrorT MPDError IO a }
+    deriving (Monad, MonadIO, MonadError MPDError)
 
---
--- Primitives
---
+instance MonadMPD UnsafeMPD where
+    send = io . send
+    open = io (open "localhost" 6600)
+    close = io close
+    getPassword = throwError (Custom "Not supported.")
 
-connection :: IORef (Maybe Handle)
-connection = unsafePerformIO (newIORef Nothing)
-{-# NOINLINE connection #-}
+unsafeMPD :: UnsafeMPD a -> IO (Response a)
+unsafeMPD = runErrorT . unMPD
 
-access :: IO (Maybe Handle)
-access = readIORef connection
+io :: IO a -> UnsafeMPD a
+io m = maybe (throwError $ Custom "") return =<< liftIO (maybeIO m)
 
-set :: (Maybe Handle) -> IO ()
-set = writeIORef connection
-
-put :: String -> IO ()
-put s = withConnection (\h -> hPutStrLn h s >> hFlush h)
-
-get :: IO String
-get = withConnection $ \h -> do
-    let slurp acc = do
-        l <- hGetLine h
-        if "OK" `isPrefixOf` l || "ACK" `isPrefixOf` l
-            then return . unlines $ reverse (l:acc)
-            else slurp (l:acc)
-    slurp []
-
---
--- Convenience
---
-
-whenJustM :: Monad m => m (Maybe a) -> (a -> m ()) -> m ()
-whenJustM f m = maybe (return ()) m =<< f
-
-whenConnected :: (Handle -> IO ()) -> IO ()
-whenConnected m = whenJustM access m
-
-withConnection :: (Handle -> IO a) -> IO a
-withConnection m = maybe (fail "No connection") m =<< access
+maybeIO :: IO a -> IO (Maybe a)
+maybeIO m = liftM Just m `catch` ((\_ -> return Nothing) :: IOException -> IO (Maybe a))
 
 --
 -- API
 --
 
-newtype UnsafeMPD a = UnsafeMPD { unsafeMPD :: ErrorT MPDError IO a }
-    deriving (Monad, MonadIO, MonadError MPDError)
-
-instance MonadMPD UnsafeMPD where
-    send  = io . sendConnection
-    open  = io openConnection
-    close = io closeConnection
-    getPassword = throwError (Custom "Oops")
-
-runUnsafeMPD :: UnsafeMPD a -> IO (Either MPDError a)
-runUnsafeMPD = runErrorT . unsafeMPD
-
-io :: IO a -> UnsafeMPD a
-io m =
-    maybe (throwError $ Custom "Awww, poor puppy...") return =<< liftIO (maybeIO m)
-
-maybeIO :: IO a -> IO (Maybe a)
-maybeIO m = liftM Just m `catch` ((\_ -> return Nothing) :: IOException -> IO (Maybe a))
-
-sendConnection :: String -> IO String
-sendConnection s = put s >> get
-
-closeConnection :: IO ()
-closeConnection = withConnection $ \h -> do
-    put "close"
-    hClose h
-    set Nothing
-
-openConnection :: IO ()
-openConnection = do
-    whenConnected $ fail "Already connected."
-    h <- connectTo host (PortNumber $ fromInteger port)
-    set (Just h)
-    -- Read OK message
-    get
+open :: String -> Int -> IO ()
+open host port = do
+    isConnected >>= flip when (fail "Already connected.")
+    h <- connectTo host (PortNumber $ fromIntegral port)
+    set h
+    -- Read OK
+    hSlurp h []
     return ()
+
+close :: IO ()
+close = ask >>= maybe (return ()) hClose
+
+send :: String -> IO String
+send s = ask >>= maybe (fail "No connection.") (\h -> hPut h s >> hSlurp h [])
+
+isConnected :: IO Bool
+isConnected = maybe (return False) hIsOpen =<< ask
+
+--
+-- Private
+--
+
+global :: IORef (MVar Handle)
+global = unsafePerformIO (newEmptyMVar >>= newIORef)
+{-# NOINLINE global #-}
+
+-- Return a handle if there is one.
+ask :: IO (Maybe Handle)
+ask = do
+    empty <- isEmptyMVar =<< readIORef global
+    if empty
+        then return Nothing
+        else Just `liftM` get
+
+-- Get the handle. Blocking.
+get :: IO Handle
+get = readIORef global >>= readMVar
+
+-- Overwrite handle.
+set :: Handle -> IO ()
+set h = do
+    mv <- newMVar h
+    writeIORef global mv
+
+hPut :: Handle -> String -> IO ()
+hPut h s = hPutStrLn h s >> hFlush h
+
+hSlurp :: Handle -> [String] -> IO String
+hSlurp h acc = do
+    l <- hGetLine h
+    if "OK" `isPrefixOf` l || "ACK" `isPrefixOf` l
+        then return . unlines $ reverse (l:acc)
+        else hSlurp h (l:acc)

@@ -31,9 +31,9 @@ import Prelude hiding (readFile, writeFile)
 
 main :: IO ()
 main = do
-    runUnsafeMPD open
+    unsafeMPD open
     fuseMain operations defaultExceptionHandler
-    runUnsafeMPD close
+    unsafeMPD close
     return ()
 
 --
@@ -268,7 +268,7 @@ songFileName = undefined
 -- Run an action in the MPD monad and lift the result
 -- into the FUSE context.
 fuseMPD :: UnsafeMPD a -> IO (Either Errno a)
-fuseMPD m = liftResponse `liftM` runUnsafeMPD m
+fuseMPD m = liftResponse `liftM` unsafeMPD m
 
 -- Lift response from MPD into the FUSE context.
 liftResponse :: Response a -> Either Errno a
@@ -279,7 +279,7 @@ liftResponse (Right r) = Right r
 -- into I/O.
 ioMPD :: UnsafeMPD a -> IO a
 ioMPD m = do
-    r <- runUnsafeMPD m
+    r <- unsafeMPD m
     either (fail . show)
            return
            r
