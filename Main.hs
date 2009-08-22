@@ -260,15 +260,9 @@ songFileName = undefined
 -- Utilities.
 --
 
--- Run an action in the MPD monad and lift the result
--- into the FUSE context.
+-- Run an action in the MPD monad and lift the result into the FUSE context.
 fuseMPD :: UnsafeMPD a -> IO (Either Errno a)
-fuseMPD m = liftResponse `liftM` unsafeMPD m
-
--- Lift response from MPD into the FUSE context.
-liftResponse :: Response a -> Either Errno a
-liftResponse (Left _)  = Left eNOENT
-liftResponse (Right r) = Right r
+fuseMPD m = unsafeMPD m >>= return . either (const $ Left eNOENT) Right
 
 -- Run an action in the MPD monad and lift the result
 -- into I/O.
