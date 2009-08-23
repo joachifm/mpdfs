@@ -59,14 +59,14 @@ open host port = do
     h <- connectTo host (PortNumber $ fromIntegral port)
     set h
     -- Read OK
-    hSlurp h []
+    hGet h
     return ()
 
 close :: IO ()
 close = ask >>= maybe (return ()) hClose
 
 send :: String -> IO String
-send s = ask >>= maybe (fail "No connection.") (\h -> hPut h s >> hSlurp h [])
+send s = ask >>= maybe (fail "No connection.") (\h -> hPut h s >> hGet h)
 
 isConnected :: IO Bool
 isConnected = maybe (return False) hIsOpen =<< ask
@@ -82,27 +82,23 @@ global = unsafePerformIO (newEmptyMVar >>= newIORef)
 -- Return a handle if there is one.
 ask :: IO (Maybe Handle)
 ask = do
-    empty <- isEmptyMVar =<< readIORef global
-    if empty
-        then return Nothing
-        else Just `liftM` get
-
--- Get the handle. Blocking.
-get :: IO Handle
-get = readIORef global >>= readMVar
+    gv      <- readIORef global
+    isEmpty <- isEmptyMVar gv
+    if isEmpty
+       then return Nothing
+       else Just `liftM` readMVar gv
 
 -- Overwrite handle.
 set :: Handle -> IO ()
-set h = do
-    mv <- newMVar h
-    writeIORef global mv
+set h = newMVar h >>= writeIORef global
 
 hPut :: Handle -> String -> IO ()
 hPut h s = hPutStrLn h s >> hFlush h
 
-hSlurp :: Handle -> [String] -> IO String
-hSlurp h acc = do
-    l <- hGetLine h
-    if "OK" `isPrefixOf` l || "ACK" `isPrefixOf` l
-        then return . unlines $ reverse (l:acc)
-        else hSlurp h (l:acc)
+hGet :: Handle -> IO String
+hGet h = let slurp acc = do
+                 l <- hGetLine h
+                 if "OK" `isPrefixOf` l || "ACK" `isPrefixOf` l
+                    then return . unlines $ reverse (l:acc)
+                    else slurp (l:acc)
+         in slurp []
