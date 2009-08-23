@@ -17,7 +17,6 @@ import Network.MPD.Unsafe
 import Control.Monad (liftM)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
-import Control.Exception (bracket)
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
 import System.Fuse
 import System.Posix hiding (createDirectory, rename)
@@ -26,10 +25,11 @@ import qualified Network.MPD as M
 import Prelude hiding (readFile, writeFile)
 
 main :: IO ()
-main = bracket (unsafeMPD open)
-               (const $ fuseMain operations defaultExceptionHandler)
-               (const $ unsafeMPD close)
-       >> return ()
+main = do
+    unsafeMPD open
+    fuseMain operations defaultExceptionHandler
+    unsafeMPD close
+    return ()
 
 --
 -- FUSE operations.
