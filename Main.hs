@@ -1,5 +1,3 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
-
 -- |
 -- Module      : Main
 -- Copyright   : (c) Joachim Fasting 2009
