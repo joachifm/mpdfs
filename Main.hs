@@ -18,7 +18,7 @@ import Control.Monad (liftM)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
-import System.Fuse
+import qualified System.Fuse as F
 import System.Posix hiding (createDirectory, rename)
 import Network.MPD hiding (rename)
 import qualified Network.MPD as M
@@ -27,7 +27,7 @@ import Prelude hiding (readFile, writeFile)
 main :: IO ()
 main = do
     unsafeMPD open
-    fuseMain operations defaultExceptionHandler
+    F.fuseMain operations F.defaultExceptionHandler
     unsafeMPD close
     return ()
 
@@ -35,76 +35,76 @@ main = do
 -- FUSE operations.
 --
 
-operations :: FuseOperations fh
-operations = defaultFuseOps
-    { fuseGetFileStat = stat
-    , fuseOpen = openFile
-    , fuseRead = readFile
-    , fuseWrite = writeFile
-    , fuseReadDirectory = readDir
-    , fuseOpenDirectory = openDirectory
-    , fuseCreateDirectory = createDirectory
-    , fuseRename = rename
+operations :: F.FuseOperations fh
+operations = F.defaultFuseOps
+    { F.fuseGetFileStat      = stat
+    , F.fuseOpen             = openFile
+    , F.fuseRead             = readFile
+    , F.fuseWrite            = writeFile
+    , F.fuseReadDirectory    = readDir
+    , F.fuseOpenDirectory    = openDirectory
+    , F.fuseCreateDirectory  = createDirectory
+    , F.fuseRename           = rename
     -- Dummies to make FUSE happy.
-    , fuseSetFileSize = (\_ _ -> return eOK)
-    , fuseSetFileTimes = (\_ _ _ -> return eOK)
-    , fuseSetFileMode = (\_ _ -> return eOK)
-    , fuseSetOwnerAndGroup = (\_ _ _ -> return eOK)
+    , F.fuseSetFileSize      = (\_ _   -> return F.eOK)
+    , F.fuseSetFileTimes     = (\_ _ _ -> return F.eOK)
+    , F.fuseSetFileMode      = (\_ _   -> return F.eOK)
+    , F.fuseSetOwnerAndGroup = (\_ _ _ -> return F.eOK)
     }
 
-openDirectory :: FilePath -> IO Errno
+openDirectory :: FilePath -> IO F.Errno
 openDirectory p = do
     putStrLn $ "OPEN DIRECTORY: " ++ p
     st <- stat p
     case st of
-        Right st' -> case statEntryType st' of
-                         Directory -> return eOK
-                         _         -> return eNOTDIR
-        _         -> return eNOENT
+        Right st' -> case F.statEntryType st' of
+                         F.Directory -> return F.eOK
+                         _           -> return F.eNOTDIR
+        _         -> return F.eNOENT
 
-createDirectory :: FilePath -> FileMode -> IO Errno
+createDirectory :: FilePath -> FileMode -> IO F.Errno
 createDirectory p _ = do
     putStrLn $ "CREATE DIRECTORY: " ++ p
     case splitDirectories ("/" </> p) of
         ("/":"Playlists":plName:[]) ->
             unsafeMPD (add_ plName "") >>=
-            return . either (const $ eNOENT) (const $ eOK)
-    return eOK
+            return . either (const $ F.eNOENT) (const $ F.eOK)
+    return F.eOK
 
-rename :: FilePath -> FilePath -> IO Errno
+rename :: FilePath -> FilePath -> IO F.Errno
 rename p newName = do
     putStrLn $ "RENAME DIRECTORY: " ++ p ++ " " ++ newName
-    return eOK
+    return F.eOK
 
 -- Implements the readdir(3) call.
-readDir :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
+readDir :: FilePath -> IO (Either F.Errno [(FilePath, F.FileStat)])
 readDir p = do
     putStrLn $ "READ DIRECTORY: " ++ p
     Right `liftM` getDirectoryContents p
 
 -- Implements the open(3) call.
-openFile :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
+openFile :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either F.Errno fh)
 openFile p _ _ = do
     putStrLn $ "OPEN FILE: " ++ p
     st <- stat p
     case st of
-        Right st' -> case statEntryType st' of
-                         RegularFile -> return $ Right undefined
-                         _           -> return $ Left eNOENT
-        _         -> return $ Left eNOENT
+        Right st' -> case F.statEntryType st' of
+                         F.RegularFile -> return $ Right undefined
+                         _             -> return $ Left F.eNOENT
+        _         -> return $ Left F.eNOENT
 
 -- Implements the read(3) call.
 -- XXX: needs cleanup
 readFile :: FilePath -> fh -> ByteCount -> FileOffset
-         ->IO (Either Errno ByteString)
+         ->IO (Either F.Errno ByteString)
 readFile p _ _ _ = do
     putStrLn $ "READ FILE " ++ p
     case splitDirectories ("/" </> p) of
         ("/":"Outputs":_:[]) -> readDeviceFile p
         ("/":"Stats":_:[])   -> readStatsFile p
-        _                    -> return $ Left eNOENT -- this should be
-                                                     -- handled by
-                                                     -- openFile?
+        _                    -> return $ Left F.eNOENT -- this should be
+                                                       -- handled by
+                                                       -- openFile?
 
 readDeviceFile p = fuseMPD $ do
    xs <- outputs
@@ -128,13 +128,13 @@ readStatsFile p = fuseMPD $
 
 -- Implements the pwrite(2) call.
 -- XXX: needs cleanup
-writeFile :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
+writeFile :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either F.Errno ByteCount)
 writeFile p _ s _ = do
     putStrLn $ "WRITE FILE" ++ p
 
     r <- case splitDirectories ("/" </> p) of
              ("/":"Outputs":_:[]) -> writeDeviceFile p s
-             _                    -> return $ Left eNOENT
+             _                    -> return $ Left F.eNOENT
 
     return $
            either Left (const $ Right . fromIntegral $ B.length s) r
@@ -145,20 +145,20 @@ writeDeviceFile p s = fuseMPD $ do
     setState (takeDeviceID p)
 
 -- Implements the stat(3) call.
-stat :: FilePath -> IO (Either Errno FileStat)
+stat :: FilePath -> IO (Either F.Errno F.FileStat)
 stat "/" = return $ Right directory
 stat p = do
     putStrLn $ "STAT DIRECTORY: " ++ p
     cs <- getDirectoryContents (takeDirectory p)
     case lookup (takeBaseName p) cs of
         Just s  -> return $ Right s
-        Nothing -> return $ Left eNOENT
+        Nothing -> return $ Left F.eNOENT
 
 --
 -- File system description.
 --
 
-getDirectoryContents :: FilePath -> IO [(FilePath, FileStat)]
+getDirectoryContents :: FilePath -> IO [(FilePath, F.FileStat)]
 getDirectoryContents p = ioMPD $ do
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
@@ -209,40 +209,40 @@ getDirectoryContents p = ioMPD $ do
 
 -- Given a file content as a string, produce a file stat with appropriate size
 -- and block information.
-mkFileStat s = regularFile { statFileSize = fromIntegral len
-                           , statBlocks   = fromIntegral blk }
+mkFileStat s = regularFile { F.statFileSize = fromIntegral len
+                           , F.statBlocks   = fromIntegral blk }
     where
         len = B.length s + 1 -- remember space for trailing newline
         blk = (len `div` 4096) + 1
 
-songFileStat :: Song -> FileStat
-songFileStat sg = regularFile { statFileSize = fromIntegral $ sgLength sg }
+songFileStat :: Song -> F.FileStat
+songFileStat sg = regularFile { F.statFileSize = fromIntegral $ sgLength sg }
 
-directory, regularFile, emptyStat :: FileStat
+directory, regularFile, emptyStat :: F.FileStat
 directory = emptyStat
-    { statEntryType = Directory
-    , statFileSize = 4096
-    , statBlocks = 1
-    , statFileMode = foldr1 unionFileModes [ ownerReadMode, ownerExecuteMode ]
+    { F.statEntryType = F.Directory
+    , F.statFileSize = 4096
+    , F.statBlocks = 1
+    , F.statFileMode = foldr1 unionFileModes [ ownerReadMode, ownerExecuteMode ]
     }
 
 regularFile = emptyStat
-    { statEntryType = RegularFile
-    , statFileMode = foldr1 unionFileModes [ ownerReadMode, ownerWriteMode ]
+    { F.statEntryType = F.RegularFile
+    , F.statFileMode = foldr1 unionFileModes [ ownerReadMode, ownerWriteMode ]
     }
 
-emptyStat = FileStat
-    { statEntryType = Unknown
-    , statFileMode = ownerModes
-    , statLinkCount = 0
-    , statFileOwner = 0
-    , statFileGroup = 0
-    , statSpecialDeviceID = 0
-    , statFileSize = 0
-    , statBlocks = 0
-    , statAccessTime = 0
-    , statModificationTime = 0
-    , statStatusChangeTime = 0
+emptyStat = F.FileStat
+    { F.statEntryType = F.Unknown
+    , F.statFileMode = ownerModes
+    , F.statLinkCount = 0
+    , F.statFileOwner = 0
+    , F.statFileGroup = 0
+    , F.statSpecialDeviceID = 0
+    , F.statFileSize = 0
+    , F.statBlocks = 0
+    , F.statAccessTime = 0
+    , F.statModificationTime = 0
+    , F.statStatusChangeTime = 0
     }
 
 --
@@ -263,8 +263,8 @@ songFileName = undefined
 --
 
 -- Run an action in the MPD monad and lift the result into the FUSE context.
-fuseMPD :: UnsafeMPD a -> IO (Either Errno a)
-fuseMPD m = unsafeMPD m >>= return . either (const $ Left eNOENT) Right
+fuseMPD :: UnsafeMPD a -> IO (Either F.Errno a)
+fuseMPD m = unsafeMPD m >>= return . either (const $ Left F.eNOENT) Right
 
 -- Run an action in the MPD monad and lift the result
 -- into I/O.
