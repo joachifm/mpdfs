@@ -13,7 +13,6 @@ build-type: Simple
 
 executable mpdfs
     main-is: Main.hs
-    other-modules: Network.MPD.Unsafe
     build-depends: base ==4.*, HFuse ==0.2.*, libmpd ==0.3.*, unix ==2.*,
                    bytestring ==0.9.*, filepath ==1.*, containers ==0.2.*,
                    mtl ==1.*, network ==2.*
