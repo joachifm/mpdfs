@@ -1,3 +1,5 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 -- |
 -- Module      : Main
 -- Copyright   : (c) Joachim Fasting 2009
@@ -12,39 +14,65 @@
 
 module Main (main) where
 
-import Network.MPD.Unsafe
-
+import Control.Concurrent (forkIO)
+import qualified Control.Concurrent.Chan as C
+import qualified Control.Concurrent.MVar as C
 import Control.Monad (liftM)
+import Control.Monad.Error (catchError)
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
 import qualified System.Fuse as F
 import System.Posix hiding (createDirectory, rename)
 import Network.MPD hiding (rename)
+import Network.MPD.Core (close)
 import qualified Network.MPD as M
 import Prelude hiding (readFile, writeFile)
 
+data Request
+    = forall a. ReqSync (MPD a) (C.MVar (Response a))
+    | ReqAsync (MPD ())
+    | ReqDone
+
 main :: IO ()
 main = do
-    unsafeMPD open
-    F.fuseMain operations F.defaultExceptionHandler
-    unsafeMPD close
+    chan  <- C.newChan
+    mDone <- C.newEmptyMVar
+    threadId <- forkIO (withMPD (mpdloop chan mDone) >> return ())
+    F.fuseMain (operations chan) F.defaultExceptionHandler
+    C.takeMVar mDone
     return ()
+
+mpdloop :: C.Chan Request -> C.MVar () -> MPD ()
+mpdloop chan mDone = loop
+    where
+        loop = liftIO (C.readChan chan) >>= go
+
+        go (ReqSync action result) = do
+            res <- catchError (Right `fmap` action) (return . Left)
+            liftIO (C.putMVar result res) >> loop
+
+        go (ReqAsync action) = do
+            action >> loop
+
+        go (ReqDone) = do
+            close >> liftIO (C.putMVar mDone ())
 
 --
 -- FUSE operations.
 --
 
-operations :: F.FuseOperations fh
-operations = F.defaultFuseOps
-    { F.fuseGetFileStat      = stat
-    , F.fuseOpen             = openFile
-    , F.fuseRead             = readFile
-    , F.fuseWrite            = writeFile
-    , F.fuseReadDirectory    = readDir
-    , F.fuseOpenDirectory    = openDirectory
-    , F.fuseCreateDirectory  = createDirectory
-    , F.fuseRename           = rename
+operations :: C.Chan Request -> F.FuseOperations fh
+operations chan = F.defaultFuseOps
+    { F.fuseGetFileStat      = stat chan
+    , F.fuseOpen             = openFile chan
+    , F.fuseRead             = readFile chan
+    , F.fuseWrite            = writeFile chan
+    , F.fuseReadDirectory    = readDir chan
+    , F.fuseOpenDirectory    = openDirectory chan
+    , F.fuseCreateDirectory  = createDirectory chan
+    , F.fuseRename           = rename chan
     -- Dummies to make FUSE happy.
     , F.fuseSetFileSize      = (\_ _   -> return F.eOK)
     , F.fuseSetFileTimes     = (\_ _ _ -> return F.eOK)
@@ -52,41 +80,42 @@ operations = F.defaultFuseOps
     , F.fuseSetOwnerAndGroup = (\_ _ _ -> return F.eOK)
     }
 
-openDirectory :: FilePath -> IO F.Errno
-openDirectory p = do
+openDirectory :: C.Chan Request -> FilePath -> IO F.Errno
+openDirectory chan p = do
     putStrLn $ "OPEN DIRECTORY: " ++ p
-    st <- stat p
+    st <- stat chan p
     case st of
         Right st' -> case F.statEntryType st' of
                          F.Directory -> return F.eOK
                          _           -> return F.eNOTDIR
         _         -> return F.eNOENT
 
-createDirectory :: FilePath -> FileMode -> IO F.Errno
-createDirectory p _ = do
+createDirectory :: C.Chan Request -> FilePath -> FileMode -> IO F.Errno
+createDirectory chan p _ = do
     putStrLn $ "CREATE DIRECTORY: " ++ p
     case splitDirectories ("/" </> p) of
         ("/":"Playlists":plName:[]) ->
-            unsafeMPD (add_ plName "") >>=
-            return . either (const $ F.eNOENT) (const $ F.eOK)
-    return F.eOK
+            either (const F.eNOENT) (const F.eOK) `fmap`
+                fuseMPD chan (add_ plName "")
 
-rename :: FilePath -> FilePath -> IO F.Errno
-rename p newName = do
+rename :: C.Chan Request -> FilePath -> FilePath -> IO F.Errno
+rename chan p newName = do
     putStrLn $ "RENAME DIRECTORY: " ++ p ++ " " ++ newName
     return F.eOK
 
 -- Implements the readdir(3) call.
-readDir :: FilePath -> IO (Either F.Errno [(FilePath, F.FileStat)])
-readDir p = do
+readDir :: C.Chan Request -> FilePath
+        -> IO (Either F.Errno [(FilePath, F.FileStat)])
+readDir chan p = do
     putStrLn $ "READ DIRECTORY: " ++ p
-    Right `liftM` getDirectoryContents p
+    Right `liftM` getDirectoryContents chan p
 
 -- Implements the open(3) call.
-openFile :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either F.Errno fh)
-openFile p _ _ = do
+openFile :: C.Chan Request -> FilePath -> OpenMode -> OpenFileFlags
+         -> IO (Either F.Errno fh)
+openFile chan p _ _ = do
     putStrLn $ "OPEN FILE: " ++ p
-    st <- stat p
+    st <- stat chan p
     case st of
         Right st' -> case F.statEntryType st' of
                          F.RegularFile -> return $ Right undefined
@@ -95,25 +124,25 @@ openFile p _ _ = do
 
 -- Implements the read(3) call.
 -- XXX: needs cleanup
-readFile :: FilePath -> fh -> ByteCount -> FileOffset
+readFile :: C.Chan Request -> FilePath -> fh -> ByteCount -> FileOffset
          ->IO (Either F.Errno ByteString)
-readFile p _ _ _ = do
+readFile chan p _ _ _ = do
     putStrLn $ "READ FILE " ++ p
     case splitDirectories ("/" </> p) of
-        ("/":"Outputs":_:[]) -> readDeviceFile p
-        ("/":"Stats":_:[])   -> readStatsFile p
+        ("/":"Outputs":_:[]) -> readDeviceFile chan p
+        ("/":"Stats":_:[])   -> readStatsFile chan p
         _                    -> return $ Left F.eNOENT -- this should be
                                                        -- handled by
                                                        -- openFile?
 
-readDeviceFile p = fuseMPD $ do
+readDeviceFile chan p = fuseMPD chan $ do
    xs <- outputs
    case filter ((==) (takeDeviceID p) . dOutputID) xs of
        [d] -> return . B.pack $
               (if dOutputEnabled d then "1" else "0") ++ "\n"
        _   -> undefined -- assume openFile makes sure this will never happen
 
-readStatsFile p = fuseMPD $
+readStatsFile chan p = fuseMPD chan $
     case lookup (takeBaseName p) selectors of
         Just f -> (flip B.snoc '\n' . packInt . f) `liftM` stats
         _      -> undefined -- let's pretend openFile will prevent us from
@@ -129,28 +158,29 @@ readStatsFile p = fuseMPD $
 
 -- Implements the pwrite(2) call.
 -- XXX: needs cleanup
-writeFile :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either F.Errno ByteCount)
-writeFile p _ s _ = do
+writeFile :: C.Chan Request -> FilePath -> fh -> ByteString -> FileOffset
+          -> IO (Either F.Errno ByteCount)
+writeFile chan p _ s _ = do
     putStrLn $ "WRITE FILE" ++ p
 
     r <- case splitDirectories ("/" </> p) of
-             ("/":"Outputs":_:[]) -> writeDeviceFile p s
+             ("/":"Outputs":_:[]) -> writeDeviceFile chan p s
              _                    -> return $ Left F.eNOENT
 
     return $
            either Left (const $ Right . fromIntegral $ B.length s) r
 
-writeDeviceFile p s = fuseMPD $ do
+writeDeviceFile chan p s = fuseMPD chan $ do
     let setState = case B.readInt s of Just (0, _) -> disableOutput
                                        _ -> enableOutput
     setState (takeDeviceID p)
 
 -- Implements the stat(3) call.
-stat :: FilePath -> IO (Either F.Errno F.FileStat)
-stat "/" = return $ Right directory
-stat p = do
+stat :: C.Chan Request -> FilePath -> IO (Either F.Errno F.FileStat)
+stat _ "/" = return $ Right directory
+stat chan p = do
     putStrLn $ "STAT DIRECTORY: " ++ p
-    cs <- getDirectoryContents (takeDirectory p)
+    cs <- getDirectoryContents chan (takeDirectory p)
     case lookup (takeBaseName p) cs of
         Just s  -> return $ Right s
         Nothing -> return $ Left F.eNOENT
@@ -159,8 +189,9 @@ stat p = do
 -- File system description.
 --
 
-getDirectoryContents :: FilePath -> IO [(FilePath, F.FileStat)]
-getDirectoryContents p = ioMPD $ do
+getDirectoryContents :: C.Chan Request -> FilePath
+                     -> IO [(FilePath, F.FileStat)]
+getDirectoryContents chan p = ioMPD chan $ do
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
         ("/":[]) -> return $ dots ++ [("Music", directory)
@@ -263,14 +294,18 @@ songFileName = undefined
 -- Utilities.
 --
 
--- Run an action in the MPD monad and lift the result into the FUSE context.
-fuseMPD :: UnsafeMPD a -> IO (Either F.Errno a)
-fuseMPD m = unsafeMPD m >>= return . either (const $ Left F.eNOENT) Right
+-- Run an action in the MPD monad and lift the result into the FUSE
+-- context.
+fuseMPD :: C.Chan Request -> MPD a -> IO (Either F.Errno a)
+fuseMPD chan x = do
+    mResult <- C.newEmptyMVar
+    C.writeChan chan $ ReqSync x mResult
+    either (const $ Left F.eNOENT) Right `fmap` C.takeMVar mResult
 
--- Run an action in the MPD monad and lift the result
--- into I/O.
-ioMPD :: UnsafeMPD a -> IO a
-ioMPD m = unsafeMPD m >>= either (fail . show) return
+-- Run an action in the MPD monad and lift the result into I/O.
+ioMPD :: C.Chan Request -> MPD a -> IO a
+ioMPD chan m = fuseMPD chan m
+           >>= either (\(F.Errno x) -> fail (show x)) return
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace from to = map (\x -> if x == from then to else x)
