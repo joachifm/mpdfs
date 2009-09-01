@@ -1,4 +1,5 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, StandaloneDeriving, DeriveDataTypeable #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- |
 -- Module      : Main
@@ -17,11 +18,15 @@ module Main (main) where
 import Control.Concurrent (forkIO)
 import qualified Control.Concurrent.Chan as C
 import qualified Control.Concurrent.MVar as C
+import Data.Char (toLower)
+import Data.List ((\\))
 import Control.Monad (liftM)
 import Control.Monad.Error (catchError)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
+import Data.Generics
+import Data.Typeable
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
 import qualified System.Fuse as F
 import System.Posix hiding (createDirectory, rename)
@@ -289,6 +294,60 @@ deviceFileName (Device i n _) = show i ++ ":" ++ replace ' ' '_' n
 
 songFileName :: Song -> FilePath
 songFileName = undefined
+
+-- Produce a directory listings from instantiated data structures.
+-- Assumes all labels in a structure share a common prefix.
+reflDir :: Data a => String -> a -> [String]
+reflDir commonPrefix d =
+    let files = map (normaliseLabel commonPrefix . fst) (introspect d)
+    in [".", ".."] ++ files
+
+-- Map label name to file system name.
+normaliseLabel :: String -> String -> String
+normaliseLabel prefix = lowerCase . dropPrefix
+    where
+        -- XXX: camelCase -> lower_case would be better
+        lowerCase = map toLower
+        dropPrefix = flip (\\) prefix
+
+-- Produce a list of key/value pairs from an instantiated data structure.
+introspect :: Data a => a -> [(String, String)]
+introspect a = zip fields (gmapQ gshow a)
+    where
+        fields = constrFields $ toConstr a
+
+-- Instances needed for reflection.
+deriving instance Read Meta
+deriving instance Data Meta
+deriving instance Typeable Meta
+
+deriving instance Read PLIndex
+deriving instance Data PLIndex
+deriving instance Typeable PLIndex
+
+deriving instance Read State
+deriving instance Data State
+deriving instance Typeable State
+
+deriving instance Read Count
+deriving instance Data Count
+deriving instance Typeable Count
+
+deriving instance Read Device
+deriving instance Data Device
+deriving instance Typeable Device
+
+deriving instance Read Stats
+deriving instance Data Stats
+deriving instance Typeable Stats
+
+deriving instance Read Song
+deriving instance Data Song
+deriving instance Typeable Song
+
+deriving instance Read Status
+deriving instance Data Status
+deriving instance Typeable Status
 
 --
 -- Utilities.
