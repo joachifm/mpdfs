@@ -121,6 +121,7 @@ readStatsFile p = fuseMPD $
     where
         selectors = [("artists", stsArtists)
                     ,("albums", stsAlbums)
+                    ,("playtime", stsPlaytime)
                     ,("songs", stsSongs)
                     ,("uptime", stsUptime)
                     ,("db_playtime", stsDbPlaytime)
