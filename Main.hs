@@ -216,16 +216,21 @@ getDirectoryContents chan p = ioMPD chan $ do
             st <- status
             return $ dots ++ [("state", mkFileStat (packInt $ stState st))
                    ,("volume", mkFileStat (packInt $ stVolume st))
+                   ,("repeat_mode", mkFileStat (packInt $ stVolume st))
                    ,("random_mode", mkFileStat (packInt $ stRandom st))
                    ,("playlist_version", mkFileStat (packInt $ stPlaylistVersion st))
                    ,("playlist_length", mkFileStat (packInt $ stPlaylistLength st))
                    ,("song_pos", mkFileStat (packInt $ stSongPos st))
                    ,("song_id", mkFileStat (packInt $ stSongID st))
+                   ,("next_song_pos", mkFileStat (packInt $ stNextSongPos))
+                   ,("next_song_id", mkFileStat (packInt $ stNextSongId))
                    ,("time", mkFileStat (packInt $ stTime st))
                    ,("bitrate", mkFileStat (packInt $ stBitrate st))
                    ,("crossfade", mkFileStat (packInt $ stXFadeWidth st))
                    ,("audio", mkFileStat (packInt $ stAudio st))
                    ,("updating_db", mkFileStat (packInt $ stUpdatingDb st))
+                   ,("single_mode", mkFileStat (packInt $ stSingle st))
+                   ,("consume_mode", mkFileStat (packInt $ stConsume st))
                    ,("error", mkFileStat (B.pack $ stError st))]
         ("/":"Stats":[]) -> do
             sts <- stats
