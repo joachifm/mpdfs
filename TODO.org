@@ -1,0 +1,7 @@
+#+Startup: overview
+#+TODO: TODO(t) ACTIVE(a) DONE(d)
+#+TAGS: bug, improvement
+
+* TODO Complete file system layout
+* TODO Refactor
+* TODO More fine-grained read/write access
