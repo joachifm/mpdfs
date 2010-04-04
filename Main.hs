@@ -223,7 +223,7 @@ getDirectoryContents chan p = ioMPD chan $ do
                    ,("song_pos", mkFileStat (packInt $ stSongPos st))
                    ,("song_id", mkFileStat (packInt $ stSongID st))
                    ,("next_song_pos", mkFileStat (packInt $ stNextSongPos))
-                   ,("next_song_id", mkFileStat (packInt $ stNextSongId))
+                   ,("next_song_id", mkFileStat (packInt $ stNextSongID))
                    ,("time", mkFileStat (packInt $ stTime st))
                    ,("bitrate", mkFileStat (packInt $ stBitrate st))
                    ,("crossfade", mkFileStat (packInt $ stXFadeWidth st))
