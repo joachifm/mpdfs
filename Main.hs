@@ -57,11 +57,9 @@ mpdloop chan mDone = loop
             res <- catchError (Right `fmap` action) (return . Left)
             liftIO (C.putMVar result res) >> loop
 
-        go (ReqAsync action) = do
-            action >> loop
+        go (ReqAsync action) = action >> loop
 
-        go (ReqDone) = do
-            close >> liftIO (C.putMVar mDone ())
+        go (ReqDone) = close >> liftIO (C.putMVar mDone ())
 
 --
 -- FUSE operations.
@@ -78,10 +76,10 @@ operations chan = F.defaultFuseOps
     , F.fuseCreateDirectory  = createDirectory chan
     , F.fuseRename           = rename chan
     -- Dummies to make FUSE happy.
-    , F.fuseSetFileSize      = (\_ _   -> return F.eOK)
-    , F.fuseSetFileTimes     = (\_ _ _ -> return F.eOK)
-    , F.fuseSetFileMode      = (\_ _   -> return F.eOK)
-    , F.fuseSetOwnerAndGroup = (\_ _ _ -> return F.eOK)
+    , F.fuseSetFileSize      = \_ _   -> return F.eOK
+    , F.fuseSetFileTimes     = \_ _ _ -> return F.eOK
+    , F.fuseSetFileMode      = \_ _   -> return F.eOK
+    , F.fuseSetOwnerAndGroup = \_ _ _ -> return F.eOK
     }
 
 openDirectory :: C.Chan Request -> FilePath -> IO F.Errno
@@ -195,7 +193,7 @@ stat chan p = do
 
 getDirectoryContents :: C.Chan Request -> FilePath
                      -> IO [(FilePath, F.FileStat)]
-getDirectoryContents chan p = ioMPD chan $ do
+getDirectoryContents chan p = ioMPD chan $
     -- NOTE: we make sure that paths begin with a slash for convenience.
     case splitDirectories ("/" </> p) of
         ("/":[]) -> return $ dots ++ [("Music", directory)
