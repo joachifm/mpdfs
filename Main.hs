@@ -145,7 +145,7 @@ readDeviceFile chan p = fuseMPD chan $ do
 
 readStatsFile chan p = fuseMPD chan $
     case lookup (takeBaseName p) selectors of
-        Just f -> (flip B.snoc '\n' . packInt . f) `liftM` stats
+        Just f -> (flip B.snoc '\n' . packShow . f) `liftM` stats
         _      -> undefined -- let's pretend openFile will prevent us from
                             -- going here
     where
@@ -215,33 +215,33 @@ getDirectoryContents chan p = ioMPD chan $
              else fail ""
         ("/":"Status":[]) -> do
             st <- status
-            return $ dots ++ [("state", mkFileStat (packInt $ stState st))
-                   ,("volume", mkFileStat (packInt $ stVolume st))
-                   ,("repeat_mode", mkFileStat (packInt $ stVolume st))
-                   ,("random_mode", mkFileStat (packInt $ stRandom st))
-                   ,("playlist_version", mkFileStat (packInt $ stPlaylistVersion st))
-                   ,("playlist_length", mkFileStat (packInt $ stPlaylistLength st))
-                   ,("song_pos", mkFileStat (packInt $ stSongPos st))
-                   ,("song_id", mkFileStat (packInt $ stSongID st))
-                   ,("next_song_pos", mkFileStat (packInt $ stNextSongPos st))
-                   ,("next_song_id", mkFileStat (packInt $ stNextSongID st))
-                   ,("time", mkFileStat (packInt $ stTime st))
-                   ,("bitrate", mkFileStat (packInt $ stBitrate st))
-                   ,("crossfade", mkFileStat (packInt $ stXFadeWidth st))
-                   ,("audio", mkFileStat (packInt $ stAudio st))
-                   ,("updating_db", mkFileStat (packInt $ stUpdatingDb st))
-                   ,("single_mode", mkFileStat (packInt $ stSingle st))
-                   ,("consume_mode", mkFileStat (packInt $ stConsume st))
+            return $ dots ++ [("state", mkFileStat (packShow $ stState st))
+                   ,("volume", mkFileStat (packShow $ stVolume st))
+                   ,("repeat_mode", mkFileStat (packShow $ stVolume st))
+                   ,("random_mode", mkFileStat (packShow $ stRandom st))
+                   ,("playlist_version", mkFileStat (packShow $ stPlaylistVersion st))
+                   ,("playlist_length", mkFileStat (packShow $ stPlaylistLength st))
+                   ,("song_pos", mkFileStat (packShow $ stSongPos st))
+                   ,("song_id", mkFileStat (packShow $ stSongID st))
+                   ,("next_song_pos", mkFileStat (packShow $ stNextSongPos st))
+                   ,("next_song_id", mkFileStat (packShow $ stNextSongID st))
+                   ,("time", mkFileStat (packShow $ stTime st))
+                   ,("bitrate", mkFileStat (packShow $ stBitrate st))
+                   ,("crossfade", mkFileStat (packShow $ stXFadeWidth st))
+                   ,("audio", mkFileStat (packShow $ stAudio st))
+                   ,("updating_db", mkFileStat (packShow $ stUpdatingDb st))
+                   ,("single_mode", mkFileStat (packShow $ stSingle st))
+                   ,("consume_mode", mkFileStat (packShow $ stConsume st))
                    ,("error", mkFileStat (B.pack $ stError st))]
         ("/":"Stats":[]) -> do
             sts <- stats
-            return $ dots ++ [("artists", mkFileStat (packInt $ stsArtists sts))
-                   ,("albums", mkFileStat (packInt $ stsAlbums sts))
-                   ,("songs", mkFileStat (packInt $ stsSongs sts))
-                   ,("uptime", mkFileStat (packInt $ stsUptime sts))
-                   ,("playtime", mkFileStat (packInt $ stsPlaytime sts))
-                   ,("db_playtime", mkFileStat (packInt $ stsDbPlaytime sts))
-                   ,("db_update", mkFileStat (packInt $ stsDbUpdate sts))]
+            return $ dots ++ [("artists", mkFileStat (packShow $ stsArtists sts))
+                   ,("albums", mkFileStat (packShow $ stsAlbums sts))
+                   ,("songs", mkFileStat (packShow $ stsSongs sts))
+                   ,("uptime", mkFileStat (packShow $ stsUptime sts))
+                   ,("playtime", mkFileStat (packShow $ stsPlaytime sts))
+                   ,("db_playtime", mkFileStat (packShow $ stsDbPlaytime sts))
+                   ,("db_update", mkFileStat (packShow $ stsDbUpdate sts))]
         _ -> fail "No such directory"
     where dots = [(".", directory), ("..", directory)]
 
@@ -316,8 +316,8 @@ ioMPD chan m = fuseMPD chan m
 replace :: Eq a => a -> a -> [a] -> [a]
 replace from to = map (\x -> if x == from then to else x)
 
-packInt :: Show a => a -> ByteString
-packInt = B.pack . show
+packShow :: Show a => a -> ByteString
+packShow = B.pack . show
 
 packBool :: Bool -> ByteString
 packBool b = B.pack (if b then "1" else "0")
