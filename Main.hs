@@ -198,6 +198,10 @@ writeFile chan p _ s _ = do
                      "play\n"  -> play Nothing
                      "pause\n" -> toggle
                      _         -> toggle
+             ("/":"Status":"volume":[]) -> fuseMPD chan $ do
+                  case B.readInt (rtrim s) of
+                      Just (x, _) -> setVolume x
+                      Nothing     -> return ()
              _                    -> return $ Left F.eNOENT
 
     return $
@@ -357,3 +361,6 @@ packShow = B.pack . show
 
 packBool :: Bool -> ByteString
 packBool b = B.pack (if b then "1" else "0")
+
+rtrim :: ByteString -> ByteString
+rtrim = B.reverse . B.dropWhile (`elem` "\n\r\t") . B.reverse
