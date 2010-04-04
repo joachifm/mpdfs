@@ -2,7 +2,7 @@
 
 -- |
 -- Module      : Main
--- Copyright   : (c) Joachim Fasting 2009
+-- Copyright   : (c) Joachim Fasting 2010
 -- License     : GPL-2 (see COPYING)
 --
 -- Maintainer  : joachim.fasting@gmail.com
