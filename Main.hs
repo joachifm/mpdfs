@@ -14,21 +14,25 @@
 
 module Main (main) where
 
-import Control.Concurrent (forkIO)
-import qualified Control.Concurrent.Chan as C
-import qualified Control.Concurrent.MVar as C
 import Control.Monad (liftM)
 import Control.Monad.Error (catchError)
 import Control.Monad.Trans (liftIO)
+
+import Control.Concurrent (forkIO)
+import qualified Control.Concurrent.Chan as C
+import qualified Control.Concurrent.MVar as C
+
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Char8 (ByteString)
+
 import System.FilePath ((</>), takeBaseName, takeDirectory, splitDirectories)
 import qualified System.Fuse as F
 import System.Posix hiding (createDirectory, rename)
+import Prelude hiding (readFile, writeFile)
+
 import Network.MPD hiding (rename)
 import Network.MPD.Core (close)
 import qualified Network.MPD as M
-import Prelude hiding (readFile, writeFile)
 
 data Request
     = forall a. ReqSync (MPD a) (C.MVar (Response a))
