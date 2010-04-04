@@ -202,7 +202,25 @@ writeFile chan p _ s _ = do
                   case B.readInt (rtrim s) of
                       Just (x, _) -> setVolume x
                       Nothing     -> return ()
-             _                    -> return $ Left F.eNOENT
+             ("/":"Status":"repeat_mode":[]) -> fuseMPD chan $ do
+                  case B.readInt (rtrim s) of
+                      Just (x, _) -> M.repeat (x /= 0)
+                      Nothing     -> return () -- XXX: should toggle by default
+             ("/":"Status":"random_mode":[]) -> fuseMPD chan $ do
+                  case B.readInt (rtrim s) of
+                      Just (x, _) -> random (x /= 0)
+                      Nothing     -> return () -- XXX: should toggle by
+                                               -- default
+             ("/":"Status":"single_mode":[]) -> fuseMPD chan $ do
+                  case B.readInt (rtrim s) of
+                      Just (x, _) -> single (x /= 0)
+                      Nothing     -> return ()
+             ("/":"Status":"consume_mode":[]) -> fuseMPD chan $ do
+                  case B.readInt (rtrim s) of
+                      Just (x, _) -> consume (x /= 0)
+                      Nothing     -> return ()
+
+             _ -> return $ Left F.eNOENT
 
     return $
            either Left (const $ Right . fromIntegral $ B.length s) r
