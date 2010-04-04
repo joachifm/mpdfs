@@ -13,8 +13,23 @@ extra-source-files: README.md TODO.org
 cabal-version: >= 1.6 && < 1.9
 build-type: Simple
 
+flag base3
+    description: Use base version 3
+    default: False
+
 executable mpdfs
     main-is: Main.hs
-    build-depends: base ==4.*, HFuse ==0.2.*, libmpd ==0.4.*, unix ==2.*,
-                   bytestring ==0.9.*, filepath ==1.*, containers ==0.3.*,
-                   mtl ==1.*, network ==2.*
+
+    if flag(base3)
+        build-depends: base ==3.*
+    else
+        build-depends: base ==4.*
+
+    build-depends: bytestring ==0.9.*,
+                   containers ==0.3.*,
+                   filepath ==1.*,
+                   HFuse ==0.2.*,
+                   libmpd ==0.4.*,
+                   mtl ==1.*,
+                   network ==2.*,
+                   unix ==2.*
