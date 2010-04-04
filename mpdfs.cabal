@@ -1,6 +1,6 @@
 name: mpdfs
 version: 0.1
-homepage:
+homepage: http://github.com/joachifm/mpdfs
 synopsis: A FUSE filesystem for the Music Player Daemon
 category:
 license: GPL
