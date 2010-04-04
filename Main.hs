@@ -96,7 +96,7 @@ createDirectory chan p _ = do
     case splitDirectories ("/" </> p) of
         ("/":"Playlists":plName:[]) ->
             either (const F.eNOENT) (const F.eOK) `fmap`
-                fuseMPD chan (add_ plName "")
+                fuseMPD chan (playlistAdd_ plName "")
 
 rename :: C.Chan Request -> FilePath -> FilePath -> IO F.Errno
 rename chan p newName = do
