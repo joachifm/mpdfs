@@ -132,10 +132,36 @@ readFile chan p _ _ _ = do
     putStrLn $ "READ FILE " ++ p
     case splitDirectories ("/" </> p) of
         ("/":"Outputs":_:[]) -> readDeviceFile chan p
+        ("/":"Status":_:[])  -> readStatusFile chan p
         ("/":"Stats":_:[])   -> readStatsFile chan p
         _                    -> return $ Left F.eNOENT -- this should be
                                                        -- handled by
                                                        -- openFile?
+
+readStatusFile chan p = fuseMPD chan $
+    case lookup (takeBaseName p) fs of
+        Just f -> (flip B.snoc '\n' . f) `liftM` status
+        _ -> undefined
+    where
+        fs = [("state", packShow . stState)
+             ,("volume", packShow . stVolume)
+             ,("repeat_mode", packBool . stRepeat)
+             ,("random_mode", packBool . stRandom)
+             ,("playlist_version", packShow . stPlaylistVersion)
+             ,("playlist_length", packShow . stPlaylistLength)
+             ,("song_pos", packMaybe . stSongPos)
+             ,("song_id", packMaybe . stSongID)
+             ,("next_song_pos", packMaybe . stNextSongPos)
+             ,("next_song_id", packMaybe . stNextSongID)
+             ,("time", packShow . stTime)
+             ,("bitrate", packShow . stBitrate)
+             ,("crossfade", packShow . stXFadeWidth)
+             ,("audio", packShow . stAudio)
+             ,("updating_db", packShow . stUpdatingDb)
+             ,("single_mode", packBool . stSingle)
+             ,("consume_mode", packBool . stConsume)
+             ,("error", B.pack . stError)
+             ]
 
 readDeviceFile chan p = fuseMPD chan $ do
    xs <- outputs
@@ -315,6 +341,10 @@ ioMPD chan m = fuseMPD chan m
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace from to = map (\x -> if x == from then to else x)
+
+packMaybe :: Show a => Maybe a -> ByteString
+packMaybe (Just x) = packShow x
+packMaybe Nothing  = B.empty
 
 packShow :: Show a => a -> ByteString
 packShow = B.pack . show
