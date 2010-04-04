@@ -188,10 +188,16 @@ readStatsFile chan p = fuseMPD chan $
 writeFile :: C.Chan Request -> FilePath -> fh -> ByteString -> FileOffset
           -> IO (Either F.Errno ByteCount)
 writeFile chan p _ s _ = do
-    putStrLn $ "WRITE FILE" ++ p
-
+    putStrLn $ "WRITE FILE " ++ p
     r <- case splitDirectories ("/" </> p) of
              ("/":"Outputs":_:[]) -> writeDeviceFile chan p s
+             ("/":"Status":"state":[]) -> fuseMPD chan $ do
+                 liftIO (putStr "INPUT: " >> print s)
+                 case B.unpack s of
+                     "stop\n"  -> stop
+                     "play\n"  -> play Nothing
+                     "pause\n" -> toggle
+                     _         -> toggle
              _                    -> return $ Left F.eNOENT
 
     return $
