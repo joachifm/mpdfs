@@ -8,7 +8,7 @@ license-file: COPYING
 author: Joachim Fasting
 maintainer: joachim.fasting@gmail.com
 extra-source-files: README.md TODO.org
-cabal-version: >= 1.2
+cabal-version: >= 1.6 && < 1.9
 build-type: Simple
 
 executable mpdfs
