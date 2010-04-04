@@ -2,6 +2,8 @@ name: mpdfs
 version: 0.1
 homepage: http://github.com/joachifm/mpdfs
 synopsis: A FUSE filesystem for the Music Player Daemon
+description: Allows the user to control MPD (Music Player Daemon) by manipulating
+    files and folders in a virtual filesystem.
 category:
 license: GPL
 license-file: COPYING
