@@ -140,8 +140,7 @@ readFile chan p _ _ _ = do
 readDeviceFile chan p = fuseMPD chan $ do
    xs <- outputs
    case filter ((==) (takeDeviceID p) . dOutputID) xs of
-       [d] -> return . B.pack $
-              (if dOutputEnabled d then "1" else "0") ++ "\n"
+       [d] -> return . flip B.snoc '\n' . packBool $ dOutputEnabled d
        _   -> undefined -- assume openFile makes sure this will never happen
 
 readStatsFile chan p = fuseMPD chan $
@@ -319,3 +318,6 @@ replace from to = map (\x -> if x == from then to else x)
 
 packInt :: Show a => a -> ByteString
 packInt = B.pack . show
+
+packBool :: Bool -> ByteString
+packBool b = B.pack (if b then "1" else "0")
